@@ -1,8 +1,10 @@
 # distutils: language = c++
 # cython: profile=True
 # cython: linetrace=True
+# cython: boundscheck=False
+# cython: nonecheck=False
 # distutils: define_macros=CYTHON_TRACE_NOGIL=1
-from libcpp.string cimport string
+from libcpp.string cimport string as cppstring
 from libcpp.vector cimport vector
 from libcpp.list cimport list as cpplist
 
@@ -26,22 +28,22 @@ cdef extern from "librdkafka/rdkafkacpp.h" namespace "RdKafka":
     cdef cppclass Conf:
         @staticmethod
         Conf * create(ConfType_type)
-        ConfResult_type set(string &, string&, string&)
-        ConfResult_type set(string, Conf * , string)
-        cpplist[string] * dump()
+        ConfResult_type set(cppstring & , cppstring&, cppstring&)
+        ConfResult_type set(cppstring, Conf *, cppstring)
+        cpplist[cppstring] * dump()
 
     cdef cppclass Message:
-        string errstr()
+        cppstring errstr()
         ErrorCode err()
         void * payload()
         size_t len()
 
     cdef cppclass KafkaConsumer:
         @staticmethod
-        KafkaConsumer * create(Conf *, string)
-        string name()
+        KafkaConsumer * create(Conf * , cppstring)
+        cppstring name()
         ErrorCode assignment(vector)
-        ErrorCode subscribe(vector[string])
+        ErrorCode subscribe(vector[cppstring])
         Message * consume(int)
         ErrorCode close()
 
@@ -53,43 +55,44 @@ cdef class Consumer:
         cdef Conf * conf = Conf.create(ConfType_type.CONF_GLOBAL)
         cdef Conf * topic_conf = Conf.create(ConfType_type.CONF_TOPIC)
         cdef conf_res
-        cdef string errstr
+        cdef cppstring errstr
         cdef ErrorCode err_code
-        cdef string opt
+        cdef cppstring opt
         # TODO: handle specila types like callbacks,
         # events, default topic config, etc
 
         # try setting global configs first, then fall through
         # to topic conf if that fails
         for option, value in config_options.iteritems():
-            opt = <string > option
-            conf_res = conf.set( < string & > option, < string & > value, errstr)
+            opt = <cppstring > option
+            conf_res = conf.set(< cppstring & > option, < cppstring & > value, errstr)
             # try topic conf
             if conf_res != ConfResult_type.CONF_OK:
-                conf_res = topic_conf.set(opt, < string > value, errstr)
+                conf_res = topic_conf.set(opt, < cppstring > value, errstr)
             if conf_res != ConfResult_type.CONF_OK:
                 raise Exception("%s: (%s,%s)" % (errstr, option, value))
 
         # set configure topic
-        conf.set( < string & > "default_topic_conf",
-                 < Conf * > topic_conf,
-                 errstr)
+        conf.set(< cppstring & > "default_topic_conf",
+                  < Conf * > topic_conf,
+                  errstr)
         del topic_conf
 
         self.consumer = KafkaConsumer.create(conf, errstr)
         if not self.consumer:
-            print "Error!"
-            print errstr
+            # print "Error!"
+            # print errstr
+            pass
 
         del conf
 
         # subscribe to topic
         err_code = self.consumer.subscribe(topics)
         if err_code:
-            print "Error!"
-            print err_code
-
-        print 'done w/ init'
+            # print "Error!"
+            # print err_code
+            pass
+        # print 'done w/ init'
 
     def __dealloc__(self):
         del self.consumer
@@ -97,7 +100,7 @@ cdef class Consumer:
     def close(self):
         self.consumer.close()
 
-    cdef handle_message(self, Message * message):
+    cdef tuple handle_message(self, Message * message):
         cdef int error_code
         cdef char * msg_ptr
 
@@ -112,13 +115,19 @@ cdef class Consumer:
         return error_code, message.errstr()
 
     def consume(self):
-        print 'created client with name:', self.consumer.name()
+        # print 'created client with name:', self.consumer.name()
+        cdef int err
+        cdef Message * resp
+        cdef tuple handle_result
         while True:
-            resp = self.consumer.consume(1000)
-            err, msg = self.handle_message(resp)
+            resp = self.consumer.consume(100)
+            handle_result = self.handle_message(resp)
+            err = handle_result[0]
+            msg = handle_result[1]
+            #err, msg = self.handle_message(resp)
             del resp
-            print 'message: ', msg
-            if not err:
+            # print 'message: ', msg
+            if err == ERR_NO_ERROR:
                 if msg:
                     yield msg
             # print msg
