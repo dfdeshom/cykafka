@@ -1,9 +1,10 @@
-# distutils: language = c++
-# cython: profile=True
-# cython: linetrace=True
 # cython: boundscheck=False
 # cython: nonecheck=False
+# distutils: language = c++
+
 # distutils: define_macros=CYTHON_TRACE_NOGIL=1
+# cython: profile=True
+# cython: linetrace=True
 from libcpp.string cimport string as cppstring
 from libcpp.vector cimport vector
 from libcpp.list cimport list as cpplist
@@ -28,8 +29,8 @@ cdef extern from "librdkafka/rdkafkacpp.h" namespace "RdKafka":
     cdef cppclass Conf:
         @staticmethod
         Conf * create(ConfType_type)
-        ConfResult_type set(cppstring & , cppstring&, cppstring&)
-        ConfResult_type set(cppstring, Conf *, cppstring)
+        ConfResult_type set(cppstring &, cppstring&, cppstring&)
+        ConfResult_type set(cppstring, Conf * , cppstring)
         cpplist[cppstring] * dump()
 
     cdef cppclass Message:
@@ -40,13 +41,20 @@ cdef extern from "librdkafka/rdkafkacpp.h" namespace "RdKafka":
 
     cdef cppclass KafkaConsumer:
         @staticmethod
-        KafkaConsumer * create(Conf * , cppstring)
+        KafkaConsumer * create(Conf *, cppstring)
         cppstring name()
         ErrorCode assignment(vector)
         ErrorCode subscribe(vector[cppstring])
         Message * consume(int)
         ErrorCode close()
 
+cdef class CyMessage:
+    cdef int error_code
+    cdef str msg
+
+    def __cinit__(self, error_code, msg):
+        self.error_code = error_code
+        self.msg = msg
 
 cdef class Consumer:
     cdef KafkaConsumer * consumer
@@ -65,7 +73,7 @@ cdef class Consumer:
         # to topic conf if that fails
         for option, value in config_options.iteritems():
             opt = <cppstring > option
-            conf_res = conf.set(< cppstring & > option, < cppstring & > value, errstr)
+            conf_res = conf.set( < cppstring & > option, < cppstring & > value, errstr)
             # try topic conf
             if conf_res != ConfResult_type.CONF_OK:
                 conf_res = topic_conf.set(opt, < cppstring > value, errstr)
@@ -73,9 +81,9 @@ cdef class Consumer:
                 raise Exception("%s: (%s,%s)" % (errstr, option, value))
 
         # set configure topic
-        conf.set(< cppstring & > "default_topic_conf",
-                  < Conf * > topic_conf,
-                  errstr)
+        conf.set( < cppstring & > "default_topic_conf",
+                 < Conf * > topic_conf,
+                 errstr)
         del topic_conf
 
         self.consumer = KafkaConsumer.create(conf, errstr)
@@ -100,32 +108,36 @@ cdef class Consumer:
     def close(self):
         self.consumer.close()
 
-    cdef tuple handle_message(self, Message * message):
+    cdef CyMessage  handle_message(self, Message * message):
         cdef int error_code
         cdef char * msg_ptr
+        cdef CyMessage cym
 
         error_code = message.err()
         # print error_code
         if error_code == ErrorCode.ERR_NO_ERROR:
             msg_ptr = <char * >message.payload()
             res = msg_ptr[:message.len()]
-            res = res.strip()
-            return error_code, res
+            #res = res.strip()
+            # return error_code, res
+            cym = CyMessage(error_code, res)
+            return cym
 
-        return error_code, message.errstr()
+        cym = CyMessage(error_code, message.errstr())
+        return cym
+        # return error_code, message.errstr()
 
     def consume(self):
-        # print 'created client with name:', self.consumer.name()
         cdef int err
         cdef Message * resp
-        cdef tuple handle_result
+        cdef CyMessage handle_result
         while True:
-            resp = self.consumer.consume(100)
+            resp = self.consumer.consume(-1)
             handle_result = self.handle_message(resp)
-            err = handle_result[0]
-            msg = handle_result[1]
-            #err, msg = self.handle_message(resp)
+            err = handle_result.error_code
+            msg = handle_result.msg
             del resp
+            del handle_result
             # print 'message: ', msg
             if err == ERR_NO_ERROR:
                 if msg:
