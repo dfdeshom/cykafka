@@ -13,8 +13,9 @@ var
 sdist
 develop-eggs
 .installed.cfg
-.so
-.cpp
+*.so
+*.cpp
+*~
 
 # Installer logs
 pip-log.txt
