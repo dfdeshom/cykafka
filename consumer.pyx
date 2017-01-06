@@ -29,8 +29,8 @@ cdef extern from "librdkafka/rdkafkacpp.h" namespace "RdKafka":
     cdef cppclass Conf:
         @staticmethod
         Conf * create(ConfType_type)
-        ConfResult_type set(cppstring &, cppstring&, cppstring&)
-        ConfResult_type set(cppstring, Conf * , cppstring)
+        ConfResult_type set(cppstring & , cppstring&, cppstring&)
+        ConfResult_type set(cppstring, Conf *, cppstring)
         cpplist[cppstring] * dump()
 
     cdef cppclass Message:
@@ -41,7 +41,7 @@ cdef extern from "librdkafka/rdkafkacpp.h" namespace "RdKafka":
 
     cdef cppclass KafkaConsumer:
         @staticmethod
-        KafkaConsumer * create(Conf *, cppstring)
+        KafkaConsumer * create(Conf * , cppstring)
         cppstring name()
         ErrorCode assignment(vector)
         ErrorCode subscribe(vector[cppstring])
@@ -62,7 +62,7 @@ cdef class Consumer:
     def __cinit__(self, *topics, **config_options):
         cdef Conf * conf = Conf.create(ConfType_type.CONF_GLOBAL)
         cdef Conf * topic_conf = Conf.create(ConfType_type.CONF_TOPIC)
-        cdef conf_res
+        cdef ConfResult_type conf_res
         cdef cppstring errstr
         cdef ErrorCode err_code
         cdef cppstring opt
@@ -73,7 +73,7 @@ cdef class Consumer:
         # to topic conf if that fails
         for option, value in config_options.iteritems():
             opt = <cppstring > option
-            conf_res = conf.set( < cppstring & > option, < cppstring & > value, errstr)
+            conf_res = conf.set(< cppstring & > option, < cppstring & > value, errstr)
             # try topic conf
             if conf_res != ConfResult_type.CONF_OK:
                 conf_res = topic_conf.set(opt, < cppstring > value, errstr)
@@ -81,9 +81,9 @@ cdef class Consumer:
                 raise Exception("%s: (%s,%s)" % (errstr, option, value))
 
         # set configure topic
-        conf.set( < cppstring & > "default_topic_conf",
-                 < Conf * > topic_conf,
-                 errstr)
+        conf.set(< cppstring & > "default_topic_conf",
+                  < Conf * > topic_conf,
+                  errstr)
         del topic_conf
 
         self.consumer = KafkaConsumer.create(conf, errstr)
@@ -114,18 +114,14 @@ cdef class Consumer:
         cdef CyMessage cym
 
         error_code = message.err()
-        # print error_code
         if error_code == ErrorCode.ERR_NO_ERROR:
             msg_ptr = <char * >message.payload()
             res = msg_ptr[:message.len()]
-            #res = res.strip()
-            # return error_code, res
             cym = CyMessage(error_code, res)
             return cym
 
         cym = CyMessage(error_code, message.errstr())
         return cym
-        # return error_code, message.errstr()
 
     def consume(self):
         cdef int err
@@ -136,10 +132,10 @@ cdef class Consumer:
             handle_result = self.handle_message(resp)
             err = handle_result.error_code
             msg = handle_result.msg
+
             del resp
             del handle_result
-            # print 'message: ', msg
+
             if err == ERR_NO_ERROR:
                 if msg:
                     yield msg
-            # print msg
