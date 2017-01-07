@@ -88,8 +88,8 @@ cdef class Consumer:
 
         self.consumer = KafkaConsumer.create(conf, errstr)
         if not self.consumer:
-            # print "Error!"
-            # print errstr
+            print "Error!"
+            print errstr
             pass
 
         del conf
@@ -97,8 +97,8 @@ cdef class Consumer:
         # subscribe to topic
         err_code = self.consumer.subscribe(topics)
         if err_code:
-            # print "Error!"
-            # print err_code
+            print "Error!"
+            print err_code
             pass
         # print 'done w/ init'
 
@@ -112,6 +112,7 @@ cdef class Consumer:
         cdef int error_code
         cdef char * msg_ptr
         cdef CyMessage cym
+        # print 'handle()'
 
         error_code = message.err()
         if error_code == ErrorCode.ERR_NO_ERROR:
@@ -120,6 +121,8 @@ cdef class Consumer:
             cym = CyMessage(error_code, res)
             return cym
 
+        e = message.errstr()
+        # print e
         cym = CyMessage(error_code, message.errstr())
         return cym
 
@@ -128,7 +131,9 @@ cdef class Consumer:
         cdef Message * resp
         cdef CyMessage handle_result
         while True:
+            # print 'before'
             resp = self.consumer.consume(-1)
+            # print 'after'
             handle_result = self.handle_message(resp)
             err = handle_result.error_code
             msg = handle_result.msg

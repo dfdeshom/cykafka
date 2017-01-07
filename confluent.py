@@ -1,7 +1,8 @@
 from confluent_kafka import Consumer, KafkaError
 import time
 
-c = Consumer({'bootstrap.servers': 'localhost', 'group.id': 'mygroup-confluent',
+c = Consumer({'bootstrap.servers': "localhost:9092,localhost:9093",
+              'group.id': 'mygroup-confluent',
               #"topic.auto.offset.reset": "earliest",
               #"topic.auto.commit.enable": "false",
               #"auto.commit.enable": "false",
@@ -9,7 +10,7 @@ c = Consumer({'bootstrap.servers': 'localhost', 'group.id': 'mygroup-confluent',
               'default.topic.config': {'auto.offset.reset': 'earliest',
                                        "auto.commit.enable": "false",
                                        }})
-c.subscribe(['test'])
+c.subscribe(['test3'])
 running = True
 start = time.time()
 while running:
